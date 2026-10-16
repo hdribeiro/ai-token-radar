@@ -58,7 +58,7 @@ def save_raw(source, payload, gz=False):
     path = os.path.join(d, f"{TODAY.isoformat()}.json" + (".gz" if gz else ""))
     data = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     if gz:
-        with gzip.open(path, "wb", mtime=0) as f:
+        with gzip.GzipFile(path, "wb", mtime=0) as f:
             f.write(data)
     else:
         with open(path, "wb") as f:
