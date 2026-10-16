@@ -1,0 +1,53 @@
+{
+  "source": "OpenRouter & a16z, State of AI: An Empirical 100 Trillion Token Study (Dec 2025)",
+  "url": "https://openrouter.ai/state-of-ai",
+  "window": "Model and pricing analyses: 2024-11-03 to 2025-11-30",
+  "geo_method": "Billing location of the OpenRouter account, not user IP. Enterprise and third-party billing can concentrate usage in hub countries (e.g. Singapore).",
+  "continent_token_share_pct": {
+    "North America": 47.22,
+    "Asia": 28.61,
+    "Europe": 21.32,
+    "South America": 1.21,
+    "Oceania": 1.18,
+    "Africa": 0.46
+  },
+  "country_token_share_pct": {
+    "United States": 47.17,
+    "Singapore": 9.21,
+    "Germany": 7.51,
+    "China": 6.01,
+    "South Korea": 2.88,
+    "Netherlands": 2.65,
+    "United Kingdom": 2.52,
+    "Canada": 1.90,
+    "Japan": 1.77,
+    "India": 1.62,
+    "Others (60+ countries)": 16.76
+  },
+  "country_iso3": {
+    "United States": "USA", "Singapore": "SGP", "Germany": "DEU", "China": "CHN",
+    "South Korea": "KOR", "Netherlands": "NLD", "United Kingdom": "GBR", "Canada": "CAN",
+    "Japan": "JPN", "India": "IND"
+  },
+  "language_token_share_pct": {
+    "English": 82.87,
+    "Chinese (Simplified)": 4.95,
+    "Russian": 2.47,
+    "Spanish": 1.43,
+    "Thai": 1.03,
+    "Other": 7.25
+  },
+  "asia_spend_share_trend": "Asia's share of weekly spend rose from about 13% at the start of the window to about 31% at the end.",
+  "open_source_tokens_by_author_trillions": {
+    "DeepSeek": 14.37, "Qwen": 5.59, "Meta LLaMA": 3.96, "Mistral AI": 2.92, "OpenAI": 1.65,
+    "Minimax": 1.26, "Z-AI": 1.18, "TNGTech": 1.13, "MoonshotAI": 0.92, "Google": 0.82
+  },
+  "headline_shares": {
+    "open_weight_share_late_2025": "about one-third of tokens",
+    "avg_weekly_share_closed_row_pct": 70.0,
+    "avg_weekly_share_chinese_oss_pct": 13.0,
+    "avg_weekly_share_row_oss_pct": 13.7,
+    "reasoning_model_token_share_late_2025": "above 50%",
+    "programming_token_share": "about 11% early 2025, above 50% by Nov 2025"
+  }
+}
