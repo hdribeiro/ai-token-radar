@@ -1,0 +1,7 @@
+{
+ "run_at": "2026-10-16T13:36:51+00:00",
+ "errors": [
+  "openrouter models: open() got an unexpected keyword argument 'mtime'",
+  "artificial analysis models: open() got an unexpected keyword argument 'mtime'"
+ ]
+}
