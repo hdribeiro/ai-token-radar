@@ -116,7 +116,9 @@ def meta(permaslug):
     author = base.split("/")[0]
     lab = LABS.get(author, {"lab": author, "origin": "Other", "default_open": None})
     m = by_slug.get(base)
-    if m is not None:
+    if author == "stealth":
+        is_open = None  # unannounced models: weights status unknown by definition
+    elif m is not None:
         is_open = bool(m.get("hugging_face_id"))
     elif OPEN_NAME_HINT.search(base):
         is_open = True
@@ -387,6 +389,7 @@ out["epoch_fixed_capability"] = ep
 out["sources"]["epoch"] = {"citation": "Epoch AI, 'LLM inference prices have fallen rapidly but unequally across tasks' (Mar 2025), epoch.ai/data-insights/llm-inference-price-trends. Milestone rows transcribed; data ends Feb 2025."}
 
 # ---------------- Artificial Analysis (effort variants) ----------------
+EFFORT_LEVELS = ["Minimal", "Low", "Medium", "High", "Xhigh", "Max"]
 aa_date, aa_pages = latest("aa_models")
 aa_rows = []
 if aa_pages:
@@ -399,10 +402,13 @@ if aa_pages:
             pin = fnum(pr.get("price_1m_input_tokens"))
             pout = fnum(pr.get("price_1m_output_tokens"))
             m = re.search(r"\(([^)]*)\)\s*$", name)
-            effort = m.group(1) if m else None
+            tag = m.group(1) if m else ""
+            first = tag.split(",")[0].strip()
+            effort = first if first in EFFORT_LEVELS else None
+            mode = first if first in ("Reasoning", "Non-reasoning") else None
             family = re.sub(r"\s*\([^)]*\)\s*$", "", name).strip()
             aa_rows.append({
-                "slug": it.get("slug"), "name": name, "family": family, "effort": effort,
+                "slug": it.get("slug"), "name": name, "family": family, "effort": effort, "mode": mode,
                 "creator": (it.get("model_creator") or {}).get("name"),
                 "intelligence": ev.get("artificial_analysis_intelligence_index"),
                 "coding": ev.get("artificial_analysis_coding_index"),
@@ -413,7 +419,13 @@ fams = defaultdict(list)
 for r in aa_rows:
     if r["effort"]:
         fams[r["family"]].append(r)
-effort_families = {k: v for k, v in fams.items() if len(v) >= 2}
+effort_families = {}
+for k, v in fams.items():
+    byl = {}
+    for r in v:  # one row per level (first wins; 'Default Fallback' duplicates dropped)
+        byl.setdefault(r["effort"], r)
+    if len(byl) >= 2 and any(r["intelligence"] is not None for r in byl.values()):
+        effort_families[k] = sorted(byl.values(), key=lambda r: EFFORT_LEVELS.index(r["effort"]))
 out["aa"] = {"as_of": aa_date, "models": aa_rows, "effort_families": effort_families}
 out["sources"]["artificial_analysis"] = {"as_of": aa_date, "citation": f"Source: Artificial Analysis (artificialanalysis.ai), free API, snapshot {aa_date}. Internal use only."}
 

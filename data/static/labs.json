@@ -31,7 +31,16 @@
     "perplexity":    {"lab": "Perplexity",    "origin": "US",    "default_open": false},
     "ai21":          {"lab": "AI21",          "origin": "Other", "default_open": true},
     "inception":     {"lab": "Inception",     "origin": "US",    "default_open": false},
-    "openrouter":    {"lab": "OpenRouter (router)", "origin": "US", "default_open": false}
+    "openrouter":    {"lab": "OpenRouter (router)", "origin": "US", "default_open": false},
+    "meta":          {"lab": "Meta",          "origin": "US",    "default_open": false},
+    "stepfun":       {"lab": "StepFun",       "origin": "China", "default_open": true},
+    "dots-studio":   {"lab": "rednote (dots)", "origin": "China", "default_open": true},
+    "thinkingmachines": {"lab": "Thinking Machines", "origin": "US", "default_open": null},
+    "upstage":       {"lab": "Upstage",       "origin": "Other", "default_open": null},
+    "poolside":      {"lab": "Poolside",      "origin": "Other", "default_open": null},
+    "stealth":       {"lab": "Stealth (unannounced)", "origin": "Other", "default_open": null},
+    "typesafe":      {"lab": "typesafe",      "origin": "Other", "default_open": null},
+    "nex-agi":       {"lab": "Nex AGI",       "origin": "Other", "default_open": null}
   },
   "origin_order": ["US", "China", "EU", "Other"]
 }
