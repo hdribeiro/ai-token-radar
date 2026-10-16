@@ -187,6 +187,9 @@ if daily:
     seg_week = defaultdict(lambda: defaultdict(int))
     lab_week = defaultdict(lambda: defaultdict(int))
     week_days = defaultdict(set)
+    seg_month = defaultdict(lambda: defaultdict(int))
+    lab_month = defaultdict(lambda: defaultdict(int))
+    month_days = defaultdict(set)
     lab_total_90 = defaultdict(int)
     price_num = defaultdict(float)
     price_den = defaultdict(int)
@@ -194,14 +197,20 @@ if daily:
     for d in complete_days:
         w = week_start(d)
         week_days[w].add(d)
+        mo = d.strftime("%Y-%m")
+        month_days[mo].add(d)
         for s, t in daily[d].items():
             if s == "other":
                 seg_week[w]["Long tail (outside top 50)"] += t
                 lab_week[w]["Long tail (outside top 50)"] += t
+                seg_month[mo]["Long tail (outside top 50)"] += t
+                lab_month[mo]["Long tail (outside top 50)"] += t
                 continue
             md = meta(s)
             seg_week[w][segment(md)] += t
             lab_week[w][md["lab"]] += t
+            seg_month[mo][segment(md)] += t
+            lab_month[mo][md["lab"]] += t
             if d > last_day - dt.timedelta(days=90):
                 lab_total_90[md["lab"]] += t
             price_den_all[w] += t
@@ -210,7 +219,7 @@ if daily:
             if md["blended"] is not None:
                 price_num[w] += md["blended"] * t
                 price_den[w] += t
-    top_labs = [l for l, _ in sorted(lab_total_90.items(), key=lambda x: -x[1])[:10]]
+    top_labs = [l for l, _ in sorted(lab_total_90.items(), key=lambda x: -x[1])[:8]]
     weeks = sorted(week_days)
     seg_names = ["Closed · US labs", "Closed · other", "Open · China", "Open · US, EU & other",
                  "Unclassified", "Long tail (outside top 50)"]
@@ -232,6 +241,18 @@ if daily:
         row["usage_weighted_blended_usd_per_m"] = rnd(price_num[w] / price_den[w]) if price_den[w] else None
         row["price_coverage_of_classified_tokens"] = rnd(price_den[w] / price_den_all[w], 3) if price_den_all[w] else None
         mix.append(row)
+    lab_cols = top_labs + ["Other labs", "Long tail (outside top 50)"]
+    monthly = {"segments": [], "labs": []}
+    for mo in sorted(month_days):
+        n = len(month_days[mo])
+        seg_row = {sname: seg_month[mo].get(sname, 0) for sname in seg_names}
+        lab_row = {l: lab_month[mo].get(l, 0) for l in top_labs}
+        lab_row["Other labs"] = sum(t for l, t in lab_month[mo].items() if l not in top_labs and not l.startswith("Long tail"))
+        lab_row["Long tail (outside top 50)"] = lab_month[mo].get("Long tail (outside top 50)", 0)
+        for kind, row in (("segments", seg_row), ("labs", lab_row)):
+            total = sum(row.values())
+            monthly[kind].append({"month": mo, "days": n, "row": row, "total": total})
+    out["monthly"] = {"cols": {"segments": seg_names, "labs": lab_cols}, "rows": monthly}
     out["weekly"] = {"segments": seg_names, "top_labs": top_labs + ["Other labs", "Long tail (outside top 50)"], "rows": mix}
 
     # leaderboard: last 7 complete days vs previous 7, variants merged into base model
@@ -497,6 +518,16 @@ if out.get("leaderboard"):
                                                     "t7", "free_share7", "blended", "in", "out", "intelligence", "created")},
                           "weights": "open" if a.get("open") else ("closed" if a.get("open") is False else "unknown")}
                          for a in out["leaderboard"]["rows"]])
+if out.get("monthly"):
+    for kind in ("segments", "labs"):
+        cols = out["monthly"]["cols"][kind]
+        abs_rows, share_rows = [], []
+        for m in out["monthly"]["rows"][kind]:
+            n, tot = m["days"], m["total"]
+            abs_rows.append({"month": m["month"], "days": n, **{c: round(m["row"][c] / n) for c in cols}, "Total": round(tot / n)})
+            share_rows.append({"month": m["month"], "days": n, **{c: rnd(m["row"][c] / tot, 4) if tot else None for c in cols}})
+        emit(f"monthly_{kind}", abs_rows)
+        emit(f"monthly_{kind}_share", share_rows)
 emit("price_landscape", out["price_landscape"]["models"])
 emit("price_quarterly", [{"quarter": q["quarter"], "median_all": q.get("all"), "median_open": q.get("open"),
                           "median_closed": q.get("closed"), "n": q["n"]}
