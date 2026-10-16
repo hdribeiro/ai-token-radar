@@ -445,6 +445,82 @@ out["build_warnings"] = warnings
 os.makedirs(DIST, exist_ok=True)
 with open(os.path.join(DIST, "radar.json"), "w", encoding="utf-8") as f:
     json.dump(out, f, separators=(",", ":"), ensure_ascii=False)
+
+# ---------------- row-shaped datasets for the dashboard ----------------
+DS = os.path.join(DIST, "datasets")
+os.makedirs(DS, exist_ok=True)
+
+
+def emit(name, rows):
+    with open(os.path.join(DS, f"{name}.json"), "w", encoding="utf-8") as f:
+        json.dump(rows, f, separators=(",", ":"), ensure_ascii=False)
+
+
+k = out.get("kpis") or {}
+src = out["sources"]
+if k:
+    pw, py = k.get("usage_weighted_price_last_week"), k.get("usage_weighted_price_year_ago")
+    full = [r for r in out["weekly"]["rows"] if r["days"] == 7]
+    lastw = full[-1] if full else {}
+    w26 = full[-27] if len(full) >= 27 else {}
+    p26 = w26.get("usage_weighted_blended_usd_per_m")
+    pw = lastw.get("usage_weighted_blended_usd_per_m", pw)
+    emit("kpis", [{
+        "window": k["window"],
+        "window_end": out["leaderboard"]["window_end"],
+        "tokens_per_day_7d": k["tokens_per_day_7d"],
+        "tokens_growth_vs_4w": k["tokens_growth_vs_4w"],
+        "tokens_yoy_multiple": rnd(1 + k["tokens_growth_yoy"], 2) if k.get("tokens_growth_yoy") is not None else None,
+        "open_weight_share_7d": k["open_weight_share_7d"],
+        "china_lab_share_7d": k["china_lab_share_7d"],
+        "price_last_week": pw, "price_year_ago": py,
+        "price_change_yoy": rnd(pw / py - 1, 3) if pw and py else None,
+        "price_week": lastw.get("week"), "price_priced_share": lastw.get("price_coverage_of_classified_tokens"),
+        "price_26w_ago": p26, "price_26w_week": w26.get("week"),
+        "price_26w_priced_share": w26.get("price_coverage_of_classified_tokens"),
+        "price_change_26w": rnd(pw / p26 - 1, 3) if pw and p26 else None,
+        "top_model_7d": k["top_model_7d"], "top_model_share_7d": k["top_model_share_7d"],
+        "rankings_as_of": src["openrouter_rankings"]["as_of"],
+        "models_as_of": models_date, "aa_as_of": aa_date,
+    }])
+if out.get("weekly"):
+    rows = out["weekly"]["rows"]
+    emit("weekly_segments", [{"week": r["week"], "days": r["days"], "segment": s, "tokens_per_day": r[s]}
+                             for r in rows for s in out["weekly"]["segments"]])
+    emit("weekly_labs", [{"week": r["week"], "days": r["days"], "lab": l, "tokens_per_day": r["labs"].get(l, 0)}
+                         for r in rows for l in out["weekly"]["top_labs"]])
+    emit("weekly_price", [{"week": r["week"], "days": r["days"],
+                           "usage_weighted_usd_per_m": r["usage_weighted_blended_usd_per_m"],
+                           "priced_share": r["price_coverage_of_classified_tokens"]} for r in rows])
+if out.get("leaderboard"):
+    emit("leaderboard", [{f: a.get(f) for f in ("rank", "base", "name", "lab", "origin", "open", "share7", "wow",
+                                                 "t7", "free_share7", "blended", "in", "out", "intelligence", "created")}
+                         for a in out["leaderboard"]["rows"]])
+emit("price_landscape", out["price_landscape"]["models"])
+emit("price_quarterly", [{"quarter": q["quarter"], "median_all": q.get("all"), "median_open": q.get("open"),
+                          "median_closed": q.get("closed"), "n": q["n"]}
+                         for q in out["price_landscape"]["quarterly_median_new_models"]])
+emit("price_families", [{"family": fam, "provider": v["provider"], **p} for fam, v in fam_out.items() for p in v["series"]])
+emit("epoch_fixed_capability", [{"series": f'{r["benchmark"]}: {r["threshold_model"]}-level', "benchmark": r["benchmark"],
+                                 "threshold_model": r["threshold_model"], "model": r["cheapest_model"],
+                                 "date": r["release_date"], "usd_per_m": r["usd_per_mtok_blended_3to1"]} for r in ep])
+emit("aa_models", [{f: r[f] for f in ("slug", "name", "family", "effort", "mode", "creator", "intelligence", "blended", "release_date")}
+                   for r in aa_rows if r["intelligence"] is not None and r["blended"]])
+emit("aa_effort", [{"family": fam, "creator": r["creator"], "effort": r["effort"],
+                    "effort_rank": EFFORT_LEVELS.index(r["effort"]), "intelligence": r["intelligence"], "blended": r["blended"]}
+                   for fam, v in effort_families.items() for r in v])
+tm = out.get("task_mix") or {}
+emit("task_macro", [{"category": c["label"], "token_share": c["token_share"], "request_share": c["usage_share"]}
+                    for c in tm.get("macro_categories", [])])
+emit("task_classes", [{"task": c["display_name"], "category": c["macro_category"], "token_share": c["token_share"],
+                       "request_share": c["usage_share"], "top_model": (c.get("models") or [{}])[0].get("id")}
+                      for c in tm.get("classifications", [])])
+emit("apps", [{"rank": a["rank"], "app": a["app_name"], "tokens": int(a["total_tokens"]), "requests": a["total_requests"],
+               "window_start": out["apps"]["window"][0], "window_end": out["apps"]["window"][1]} for a in out["apps"]["rows"]])
+soa = out["state_of_ai_2025"]
+emit("geo_continents", [{"continent": c, "token_share_pct": v} for c, v in soa["continent_token_share_pct"].items()])
+emit("geo_countries", [{"country": c, "token_share_pct": v} for c, v in soa["country_token_share_pct"].items()])
+emit("languages", [{"language": c, "token_share_pct": v} for c, v in soa["language_token_share_pct"].items()])
 print("built dist/radar.json", {k: (len(v) if isinstance(v, (list, dict)) else v) for k, v in out.items() if k != "sources"})
 if warnings:
     print("warnings:", warnings)
