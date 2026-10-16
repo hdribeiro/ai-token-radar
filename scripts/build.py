@@ -493,8 +493,9 @@ if out.get("weekly"):
                            "usage_weighted_usd_per_m": r["usage_weighted_blended_usd_per_m"],
                            "priced_share": r["price_coverage_of_classified_tokens"]} for r in rows])
 if out.get("leaderboard"):
-    emit("leaderboard", [{f: a.get(f) for f in ("rank", "base", "name", "lab", "origin", "open", "share7", "wow",
-                                                 "t7", "free_share7", "blended", "in", "out", "intelligence", "created")}
+    emit("leaderboard", [{**{f: a.get(f) for f in ("rank", "base", "name", "lab", "origin", "share7", "wow",
+                                                    "t7", "free_share7", "blended", "in", "out", "intelligence", "created")},
+                          "weights": "open" if a.get("open") else ("closed" if a.get("open") is False else "unknown")}
                          for a in out["leaderboard"]["rows"]])
 emit("price_landscape", out["price_landscape"]["models"])
 emit("price_quarterly", [{"quarter": q["quarter"], "median_all": q.get("all"), "median_open": q.get("open"),
