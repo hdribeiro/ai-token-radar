@@ -518,6 +518,56 @@ if out.get("leaderboard"):
                                                     "t7", "free_share7", "blended", "in", "out", "intelligence", "created")},
                           "weights": "open" if a.get("open") else ("closed" if a.get("open") is False else "unknown")}
                          for a in out["leaderboard"]["rows"]])
+# ---------------- origin split: China / US / Others, monthly and quarterly ----------------
+if daily:
+    import calendar
+    ORIGINS = ["china", "us", "others"]
+
+    def origin_of(slug):
+        if slug == "other":
+            return "others"  # long tail outside the daily top 50: origin unknown
+        md = meta(slug)
+        if md["author"] == "stealth":
+            return "others"
+        return {"China": "china", "US": "us"}.get(md["origin"], "others")
+
+    def period_rows(keyfn, length_fn):
+        agg = defaultdict(lambda: defaultdict(int))
+        days = defaultdict(set)
+        for d in complete_days:
+            k = keyfn(d)
+            days[k].add(d)
+            for s, t in daily[d].items():
+                agg[k][origin_of(s)] += t
+        rows, prev = [], None
+        for k in sorted(agg):
+            n = len(days[k])
+            tot = sum(agg[k].values())
+            r = {"period": k, "days": n, "partial": n < length_fn(k), "total_tpd": round(tot / n)}
+            for o in ORIGINS:
+                r[f"{o}_tpd"] = round(agg[k][o] / n)
+                r[f"{o}_share"] = rnd(agg[k][o] / tot, 4) if tot else None
+            for o in ORIGINS + ["total"]:
+                r[f"{o}_growth"] = rnd(r[f"{o}_tpd"] / prev[f"{o}_tpd"] - 1, 4) if prev and prev[f"{o}_tpd"] else None
+            for o in ORIGINS:
+                r[f"{o}_share_pp"] = rnd((r[f"{o}_share"] - prev[f"{o}_share"]) * 100, 2) if prev and r[f"{o}_share"] is not None and prev[f"{o}_share"] is not None else None
+            rows.append(r)
+            prev = r
+        return rows
+
+    def month_len(k):
+        y, m = map(int, k.split("-"))
+        return calendar.monthrange(y, m)[1]
+
+    def quarter_len(k):
+        y, q = int(k[:4]), int(k[-1])
+        return sum(calendar.monthrange(y, m)[1] for m in range(3 * q - 2, 3 * q + 1))
+
+    out["origin_monthly"] = period_rows(lambda d: d.strftime("%Y-%m"), month_len)
+    out["origin_quarterly"] = period_rows(lambda d: f"{d.year}-Q{(d.month - 1) // 3 + 1}", quarter_len)
+    emit("origin_monthly", out["origin_monthly"])
+    emit("origin_quarterly", out["origin_quarterly"])
+
 if out.get("monthly"):
     for kind in ("segments", "labs"):
         cols = out["monthly"]["cols"][kind]
