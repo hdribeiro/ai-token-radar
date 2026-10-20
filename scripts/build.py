@@ -565,6 +565,8 @@ if daily:
 
     out["origin_monthly"] = period_rows(lambda d: d.strftime("%Y-%m"), month_len)
     out["origin_quarterly"] = period_rows(lambda d: f"{d.year}-Q{(d.month - 1) // 3 + 1}", quarter_len)
+    out["origin_weekly"] = period_rows(lambda d: week_start(d).isoformat(), lambda k: 7)
+    emit("origin_weekly", out["origin_weekly"])
     emit("origin_monthly", out["origin_monthly"])
     emit("origin_quarterly", out["origin_quarterly"])
 
