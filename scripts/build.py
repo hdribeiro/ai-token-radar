@@ -605,6 +605,79 @@ soa = out["state_of_ai_2025"]
 emit("geo_continents", [{"continent": c, "token_share_pct": v} for c, v in soa["continent_token_share_pct"].items()])
 emit("geo_countries", [{"country": c, "token_share_pct": v} for c, v in soa["country_token_share_pct"].items()])
 emit("languages", [{"language": c, "token_share_pct": v} for c, v in soa["language_token_share_pct"].items()])
+
+
+# ---------------- Ramp AI Index (US business adoption, monthly) ----------------
+def ramp_payload(raw, tool):
+    r = (((raw or {}).get("mcp") or {}).get(tool) or {}).get("result") or {}
+    if r.get("isError"):
+        return None
+    if r.get("structuredContent"):
+        return r["structuredContent"]
+    txt = "".join(c.get("text", "") for c in r.get("content", []) if c.get("type") == "text")
+    try:
+        return json.loads(txt)
+    except Exception:
+        return None
+
+
+ramp_files = sorted(glob.glob(os.path.join(RAW, "ramp_ai_index", "*.json")))
+ramp_date, adoption, sectors, sizes = None, None, None, None
+for f in reversed(ramp_files):  # newest snapshot that has the adoption series
+    raw = load_json(f)
+    a = ramp_payload(raw, "ai_index_get_adoption")
+    if a and a.get("data"):
+        ramp_date = os.path.basename(f).split(".")[0]
+        adoption = a
+        sectors = ramp_payload(raw, "ai_index_get_adoption_by_sector")
+        sizes = ramp_payload(raw, "ai_index_get_adoption_by_size")
+        break
+if adoption:
+    vendor_key = {"OpenAI": "openai", "Anthropic": "anthropic", "Google": "google", "xAI": "xai", "DeepSeek": "deepseek"}
+    monthly = []
+    for rec in sorted(adoption["data"], key=lambda r: r["month"]):
+        row = {"period": rec["month"], "overall_pct": rnd(rec["ai_adoption_share"] * 100, 2)}
+        for v in rec.get("vendors", []):
+            key = vendor_key.get(v["vendor"], v["vendor"].lower().replace(" ", "_"))
+            row[f"{key}_pct"] = rnd((v.get("ai_adoption_share") or 0) * 100, 2)
+        monthly.append(row)
+    cols = sorted({k for r in monthly for k in r if k.endswith("_pct")})
+    for i, r in enumerate(monthly):  # MoM and YoY change in percentage points
+        prev = monthly[i - 1] if i else None
+        yago = next((p for p in monthly if p["period"] == f"{int(r['period'][:4]) - 1}{r['period'][4:]}"), None)
+        for c in cols:
+            base = c[:-4]
+            r[f"{base}_mom_pp"] = rnd(r.get(c, 0) - prev.get(c, 0), 2) if prev else None
+            r[f"{base}_yoy_pp"] = rnd(r.get(c, 0) - yago.get(c, 0), 2) if yago else None
+    emit("ramp_monthly", monthly)
+    qrows = {}
+    for r in monthly:
+        y, m = r["period"].split("-")
+        qrows.setdefault(f"{y}-Q{(int(m) - 1) // 3 + 1}", []).append(r)
+    quarterly = []
+    for q, rs in sorted(qrows.items()):
+        row = {"period": q, "months": len(rs), "partial": len(rs) < 3}
+        for c in cols:
+            row[c] = rnd(sum(x.get(c, 0) for x in rs) / len(rs), 2)
+        quarterly.append(row)
+    for i, r in enumerate(quarterly):
+        prev = quarterly[i - 1] if i else None
+        for c in cols:
+            r[f"{c[:-4]}_qoq_pp"] = rnd(r[c] - prev[c], 2) if prev else None
+    emit("ramp_quarterly", quarterly)
+    seg_rows = []
+    for dim, payload, key in (("sector", sectors, "sectors"), ("size", sizes, "sizes")):
+        for rec in (payload or {}).get("data", []):
+            for s in rec.get(key, []):
+                seg_rows.append({"period": rec["month"], "dim": dim, "segment": s.get("sector") or s.get("size"),
+                                 "share_pct": rnd((s.get("ai_adoption_share") or 0) * 100, 2)})
+    emit("ramp_segments", sorted(seg_rows, key=lambda r: (r["dim"], r["segment"], r["period"])))
+    out["sources"]["ramp_ai_index"] = {
+        "as_of": ramp_date, "latest_month": monthly[-1]["period"],
+        "citation": f"Source: Ramp AI Index (ramp.com/data/ai-index), Ramp Economics Lab, via Ramp's public MCP server, snapshot {ramp_date}. "
+                    "Share of US businesses on Ramp with a paid AI transaction in the month."}
+else:
+    warnings.append("ramp: no AI Index snapshot found")
 print("built dist/radar.json", {k: (len(v) if isinstance(v, (list, dict)) else v) for k, v in out.items() if k != "sources"})
 if warnings:
     print("warnings:", warnings)
