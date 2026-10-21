@@ -164,6 +164,58 @@ def aa_models():
     save_raw("aa_models", pages, gz=True)
 
 
+# ---------------- Ramp AI Index (US business adoption, monthly) ----------------
+RAMP_MCP = "https://mcp.ramp.com/ramp-data/anthropic/mcp"
+
+
+def _mcp_post(body, session=None):
+    h = {"User-Agent": UA, "Content-Type": "application/json",
+         "Accept": "application/json, text/event-stream"}
+    if session:
+        h["Mcp-Session-Id"] = session
+    req = urllib.request.Request(RAMP_MCP, data=json.dumps(body).encode(), headers=h, method="POST")
+    with urllib.request.urlopen(req, timeout=60) as r:
+        sid = r.headers.get("Mcp-Session-Id") or session
+        raw = r.read().decode("utf-8", "replace")
+        ctype = r.headers.get("Content-Type", "")
+    if not raw.strip():
+        return None, sid
+    if "text/event-stream" in ctype or raw.lstrip().startswith(("event:", "data:")):
+        msgs = [json.loads(l[5:].strip()) for l in raw.splitlines() if l.startswith("data:") and l[5:].strip()]
+        msg = next((m for m in msgs if m.get("id") == body.get("id")), msgs[-1] if msgs else None)
+    else:
+        msg = json.loads(raw)
+    return msg, sid
+
+
+def ramp_index():
+    out = {"fred": {}, "mcp": {}}
+    # headline series on FRED (no key needed for the graph CSV)
+    req = urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=RAMPAIALL",
+                                 headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        out["fred"]["RAMPAIALL"] = r.read().decode("utf-8")
+    # vendor / sector / size breakdowns via Ramp's public MCP server
+    try:
+        init, sid = _mcp_post({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                               "params": {"protocolVersion": "2025-03-26", "capabilities": {},
+                                          "clientInfo": {"name": "ai-token-radar", "version": "1.0"}}})
+        out["mcp"]["initialize"] = init
+        _mcp_post({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
+        tl, _ = _mcp_post({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, sid)
+        out["mcp"]["tools"] = tl
+        for i, tool in enumerate(("ai_index_get_adoption", "ai_index_get_adoption_by_sector",
+                                  "ai_index_get_adoption_by_size"), start=3):
+            res, _ = _mcp_post({"jsonrpc": "2.0", "id": i, "method": "tools/call",
+                                "params": {"name": tool, "arguments": {"months": 120}}}, sid)
+            out["mcp"][tool] = res
+    except Exception as e:
+        out["mcp"]["error"] = str(e)
+    save_raw("ramp_ai_index", out)
+    if "error" in out["mcp"]:
+        raise RuntimeError("Ramp MCP: " + out["mcp"]["error"] + " (FRED headline saved)")
+
+
 if __name__ == "__main__":
     step("openrouter rankings", or_rankings)
     step("openrouter models", or_models)
@@ -171,9 +223,10 @@ if __name__ == "__main__":
     step("openrouter apps", or_apps)
     step("openrouter benchmarks (AA via OR)", or_benchmarks)
     step("artificial analysis models", aa_models)
+    step("ramp ai index", ramp_index)
     status = {"run_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
               "errors": errors}
     with open(os.path.join(DATA, "last_run.json"), "w") as f:
         json.dump(status, f, indent=1)
     # fail the job only if every source failed
-    sys.exit(1 if len(errors) == 6 else 0)
+    sys.exit(1 if len(errors) == 7 else 0)
