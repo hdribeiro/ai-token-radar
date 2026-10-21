@@ -189,7 +189,7 @@ def _mcp_post(body, session=None):
 
 
 def ramp_index():
-    out = {"fred": {}, "mcp": {}, "errors": []}
+    out = {"mcp": {}, "errors": []}
     # vendor / sector / size breakdowns via Ramp's public MCP server
     try:
         init, sid = _mcp_post({"jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -206,20 +206,16 @@ def ramp_index():
                                   "ai_index_get_adoption_by_size"), start=3):
             try:
                 res, _ = _mcp_post({"jsonrpc": "2.0", "id": i, "method": "tools/call",
-                                    "params": {"name": tool, "arguments": {"months": 120}}}, sid)
+                                    "params": {"name": tool, "arguments": {
+                                        "months": 120,
+                                        "rationale": "Monthly refresh of a private dashboard section on US business AI adoption."}}}, sid)
+                if ((res or {}).get("result") or {}).get("isError"):
+                    raise RuntimeError(json.dumps(res)[:300])
                 out["mcp"][tool] = res
             except Exception as e:
                 out["errors"].append(f"mcp {tool}: {e}")
     except Exception as e:
         out["errors"].append(f"mcp init: {e}")
-    # headline series on FRED (no key needed for the graph CSV); fallback only
-    try:
-        req = urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=RAMPAIALL",
-                                     headers={"User-Agent": "Mozilla/5.0 (ai-token-radar)"})
-        with urllib.request.urlopen(req, timeout=90) as r:
-            out["fred"]["RAMPAIALL"] = r.read().decode("utf-8")
-    except Exception as e:
-        out["errors"].append(f"fred: {e}")
     save_raw("ramp_ai_index", out)
     if out["errors"]:
         raise RuntimeError("; ".join(out["errors"]))
