@@ -174,7 +174,7 @@ def _mcp_post(body, session=None):
     if session:
         h["Mcp-Session-Id"] = session
     req = urllib.request.Request(RAMP_MCP, data=json.dumps(body).encode(), headers=h, method="POST")
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=90) as r:
         sid = r.headers.get("Mcp-Session-Id") or session
         raw = r.read().decode("utf-8", "replace")
         ctype = r.headers.get("Content-Type", "")
@@ -189,31 +189,40 @@ def _mcp_post(body, session=None):
 
 
 def ramp_index():
-    out = {"fred": {}, "mcp": {}}
-    # headline series on FRED (no key needed for the graph CSV)
-    req = urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=RAMPAIALL",
-                                 headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        out["fred"]["RAMPAIALL"] = r.read().decode("utf-8")
+    out = {"fred": {}, "mcp": {}, "errors": []}
     # vendor / sector / size breakdowns via Ramp's public MCP server
     try:
         init, sid = _mcp_post({"jsonrpc": "2.0", "id": 1, "method": "initialize",
                                "params": {"protocolVersion": "2025-03-26", "capabilities": {},
                                           "clientInfo": {"name": "ai-token-radar", "version": "1.0"}}})
         out["mcp"]["initialize"] = init
-        _mcp_post({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
+        try:
+            _mcp_post({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
+        except Exception:
+            pass
         tl, _ = _mcp_post({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, sid)
         out["mcp"]["tools"] = tl
         for i, tool in enumerate(("ai_index_get_adoption", "ai_index_get_adoption_by_sector",
                                   "ai_index_get_adoption_by_size"), start=3):
-            res, _ = _mcp_post({"jsonrpc": "2.0", "id": i, "method": "tools/call",
-                                "params": {"name": tool, "arguments": {"months": 120}}}, sid)
-            out["mcp"][tool] = res
+            try:
+                res, _ = _mcp_post({"jsonrpc": "2.0", "id": i, "method": "tools/call",
+                                    "params": {"name": tool, "arguments": {"months": 120}}}, sid)
+                out["mcp"][tool] = res
+            except Exception as e:
+                out["errors"].append(f"mcp {tool}: {e}")
     except Exception as e:
-        out["mcp"]["error"] = str(e)
+        out["errors"].append(f"mcp init: {e}")
+    # headline series on FRED (no key needed for the graph CSV); fallback only
+    try:
+        req = urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=RAMPAIALL",
+                                     headers={"User-Agent": "Mozilla/5.0 (ai-token-radar)"})
+        with urllib.request.urlopen(req, timeout=90) as r:
+            out["fred"]["RAMPAIALL"] = r.read().decode("utf-8")
+    except Exception as e:
+        out["errors"].append(f"fred: {e}")
     save_raw("ramp_ai_index", out)
-    if "error" in out["mcp"]:
-        raise RuntimeError("Ramp MCP: " + out["mcp"]["error"] + " (FRED headline saved)")
+    if out["errors"]:
+        raise RuntimeError("; ".join(out["errors"]))
 
 
 if __name__ == "__main__":
