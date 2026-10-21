@@ -1,6 +1,6 @@
 {
- "run_at": "2026-10-21T21:23:44+00:00",
+ "run_at": "2026-10-21T21:29:57+00:00",
  "errors": [
-  "ramp ai index: The read operation timed out"
+  "ramp ai index: fred: The read operation timed out"
  ]
 }
